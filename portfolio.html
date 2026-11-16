@@ -6,7 +6,7 @@
 
   <title>Мои работы — Anzero Website</title>
   <meta name="description" content="Портфолио Никиты (Anzero Website): сайты кофеен, сайт-портфолио стилиста и многостраничный сайт мастера маникюра.">
-  <meta name="theme-color" content="#050b1f">
+  <meta name="theme-color" content="#060609">
 
   <meta property="og:type" content="website">
   <meta property="og:locale" content="ru_RU">
@@ -21,29 +21,26 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@600;700;800;900&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
-  <div class="cursor-glow" id="cursor-glow" aria-hidden="true"></div>
+  <canvas class="petals-bg" id="petals-bg" aria-hidden="true"></canvas>
+  <div class="cursor" id="cursor" aria-hidden="true"></div>
   <div class="progress" id="progress" aria-hidden="true"></div>
 
-  <!-- ШАПКА С МЕНЮ (одинаковая на всех страницах) -->
+  <!-- ШАПКА С МЕНЮ (одинаковая на внутренних страницах; текущая — nav__link--active) -->
   <header class="header" id="header">
     <div class="container header__inner">
-      <a href="index.html" class="logo">
-        <span class="logo__mark">A</span>
-        <span class="logo__text">Anzero <b>Website</b></span>
-      </a>
+      <a href="index.html" class="logo" aria-label="Anzero Website — на главную">anzero<span class="logo__sub">website</span></a>
 
-      <nav class="nav" id="nav">
-        <a href="index.html" class="nav__link">Главная</a>
-        <a href="portfolio.html" class="nav__link nav__link--active" aria-current="page">Мои работы</a>
+      <nav class="nav" id="nav" aria-label="Главное меню">
+        <a href="portfolio.html" class="nav__link nav__link--active" aria-current="page">Работы</a>
         <a href="prices.html" class="nav__link">Цены</a>
-        <a href="contacts.html" class="nav__link">Контакты</a>
-        <a href="contacts.html" class="btn btn--small nav__cta">Заказать сайт</a>
+        <a href="index.html#process" class="nav__link">Как работаю</a>
+        <a href="contacts.html" class="btn btn--small nav__cta">Написать</a>
       </nav>
 
       <button class="burger" id="burger" type="button" aria-label="Открыть меню" aria-expanded="false" aria-controls="nav">
@@ -64,26 +61,15 @@
            <span class="work-card__soon">Скоро онлайн</span>
          По клику на карточку открывается окно с большим скриншотом.
          ============================================================ -->
-    <section class="section section--glow page-section" id="works">
-      <div class="section-glow section-glow--left" data-parallax="0.6" aria-hidden="true"></div>
-      <div class="bg-grid" aria-hidden="true"></div>
-      <div class="decor" aria-hidden="true">
-        <span class="deco" data-parallax="0.4" style="--x:2.5%;--y:7%;--size:58px;--depth:0.7;--dur:8s;--rot:-10deg"><svg viewBox="0 0 64 64"><use href="#i-palette"/></svg></span>
-        <span class="deco" data-parallax="-0.3" style="--x:93%;--y:12%;--size:50px;--depth:1;--dur:7s;--delay:-3s;--rot:16deg;--c:#7dd3fc"><svg viewBox="0 0 64 64"><use href="#i-brush"/></svg></span>
-        <span class="deco deco--desk" data-parallax="0.5" style="--x:2%;--y:44%;--size:62px;--depth:0.5;--dur:10s;--delay:-5s;--rot:6deg"><svg viewBox="0 0 64 64"><use href="#i-grid"/></svg></span>
-        <span class="deco deco--desk" data-parallax="-0.5" style="--x:95%;--y:50%;--size:40px;--depth:1.2;--dur:6s;--delay:-2s;--rot:-8deg;--c:#bae6fd"><svg viewBox="0 0 64 64"><use href="#i-pixel"/></svg></span>
-        <span class="deco" data-parallax="0.3" style="--x:3.5%;--y:84%;--size:52px;--depth:0.9;--dur:9s;--delay:-1s;--rot:-14deg"><svg viewBox="0 0 64 64"><use href="#i-magnifier"/></svg></span>
-        <span class="deco deco--desk" data-parallax="-0.4" style="--x:92%;--y:86%;--size:60px;--depth:0.6;--dur:8.5s;--delay:-4s;--rot:8deg"><svg viewBox="0 0 64 64"><use href="#i-uicard"/></svg></span>
-      </div>
-
+    <section class="section page-section" id="works">
       <div class="container">
-        <div class="section__head reveal">
-          <span class="section__label">Портфолио</span>
-          <h1 class="section__title">Мои работы</h1>
-          <p class="section__text">Сайты, которые я сделал. Нажмите на карточку, чтобы рассмотреть скриншот поближе.</p>
+        <div class="section__head section__head--center">
+          <span class="section__label reveal">Портфолио</span>
+          <h1 class="section__title t3d split reveal">Мои работы</h1>
+          <p class="section__text reveal">Сайты, которые я сделал. Нажмите на карточку, чтобы рассмотреть скриншот поближе.</p>
         </div>
 
-        <div class="works-grid works-grid--two">
+        <div class="works-grid">
 
           <!-- Работа 1 -->
           <article class="work-card reveal">
@@ -157,7 +143,7 @@
 
         <!-- Призыв после работ -->
         <div class="cta cta--compact reveal">
-          <h2 class="cta__title">Хотите такой же сайт?</h2>
+          <h2 class="cta__title t3d">Хотите такой же сайт?</h2>
           <p class="cta__text">Расскажите о своём бизнесе — сделаем сайт, который подойдёт именно вам.</p>
           <div class="cta__buttons">
             <a href="contacts.html" class="btn">Заказать сайт</a>
@@ -172,22 +158,19 @@
   <!-- ПОДВАЛ (одинаковый на всех страницах) -->
   <footer class="footer">
     <div class="container footer__inner">
-      <a href="index.html" class="logo">
-        <span class="logo__mark">A</span>
-        <span class="logo__text">Anzero <b>Website</b></span>
-      </a>
+      <span class="footer__brand">made by anzero</span>
       <nav class="footer__nav" aria-label="Меню в подвале">
         <a href="index.html">Главная</a>
         <a href="portfolio.html">Мои работы</a>
         <a href="prices.html">Цены</a>
         <a href="contacts.html">Контакты</a>
       </nav>
-      <p>© <span id="year"></span> Anzero Website. Сайты и Telegram-боты на заказ.</p>
+      <p class="footer__copy">© <span id="year"></span> Anzero Website. Сайты и Telegram-боты на заказ.</p>
     </div>
   </footer>
 
   <button class="to-top" id="to-top" type="button" aria-label="Наверх">
-    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
   </button>
 
   <!-- ============================================================
@@ -198,7 +181,7 @@
     <div class="modal__backdrop" data-modal-close></div>
     <div class="modal__window" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
       <button type="button" class="modal__close" data-modal-close aria-label="Закрыть">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       </button>
       <div class="modal__cover">
         <img id="modal-img" src="img/works/web/gus.jpg" alt="">
@@ -213,9 +196,8 @@
     </div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
   <script src="js/icons.js"></script>
+  <script src="js/flowers.js"></script>
   <script src="js/script.js"></script>
 </body>
 </html>

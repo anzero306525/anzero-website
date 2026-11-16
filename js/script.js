@@ -2,7 +2,8 @@
    JAVASCRIPT САЙТА ANZERO WEBSITE
    Один общий файл для всех страниц. Каждая часть сначала проверяет,
    есть ли на странице нужный блок, — поэтому на страницах, где блока
-   нет (например, телефона на «Ценах»), ничего не ломается.
+   нет, ничего не ломается.
+   Цветочки — в отдельном файле js/flowers.js.
    ================================================================= */
 
 // Включена ли в системе настройка «уменьшить движение»
@@ -11,19 +12,18 @@ const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').match
 // Есть ли у устройства мышь (на телефонах и планшетах — нет)
 const canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
-// Загрузились ли библиотеки GSAP и ScrollTrigger (без интернета их не будет —
-// тогда сайт работает без них, просто без параллакса)
-const hasGSAP = typeof window.gsap !== 'undefined' && typeof window.ScrollTrigger !== 'undefined';
 
-
-/* --- 0. Страница всегда открывается с самого начала ---
-   Браузер сам запоминает место прокрутки и возвращает туда при F5,
-   а адрес с #якорем открывает страницу на середине. Отключаем оба. */
+/* --- 0. Открытие страницы ---
+   Обычно страница открывается с самого начала. Но если пришли по ссылке
+   на раздел (например index.html#process из меню на странице «Цены»),
+   плавно прокручиваем к этому разделу. #якорь потом убираем из адреса. */
 if ('scrollRestoration' in history) {
   history.scrollRestoration = 'manual';
 }
 
-// Убираем #якорь из адреса (страница не «прыгнет» к разделу)
+const startHash = window.location.hash;
+const startTarget = startHash.length > 1 ? document.querySelector(startHash) : null;
+
 function clearHash() {
   if (window.location.hash) {
     history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -34,11 +34,18 @@ clearHash();
 window.addEventListener('hashchange', clearHash);
 
 function scrollToStart() {
-  window.scrollTo(0, 0);
+  if (startTarget) return;
+  window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
 scrollToStart();
-window.addEventListener('load', scrollToStart);
+window.addEventListener('load', () => {
+  if (startTarget) {
+    setTimeout(() => startTarget.scrollIntoView({ behavior: 'instant' }), 50);
+  } else {
+    scrollToStart();
+  }
+});
 // Возврат на страницу кнопкой «Назад» из кэша браузера
 window.addEventListener('pageshow', (event) => {
   if (event.persisted) scrollToStart();
@@ -63,6 +70,10 @@ nav.querySelectorAll('a').forEach((link) => {
   link.addEventListener('click', () => setMenu(false));
 });
 
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && nav.classList.contains('nav--open')) setMenu(false);
+});
+
 
 /* --- 2. Шапка, полоска прогресса и кнопка «Наверх» при прокрутке --- */
 const header = document.getElementById('header');
@@ -74,7 +85,7 @@ function onScroll() {
   const y = window.scrollY;
   const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
 
-  // Если прокрутили больше 20 пикселей — добавляем шапке фон
+  // Прокрутили больше 20 пикселей — шапка становится компактной, с размытым фоном
   header.classList.toggle('header--scrolled', y > 20);
   // Полоска сверху показывает, какая часть страницы уже прочитана
   progress.style.transform = 'scaleX(' + (maxScroll > 0 ? y / maxScroll : 0) + ')';
@@ -98,9 +109,30 @@ toTop.addEventListener('click', () => {
 });
 
 
-/* --- 3. Заголовки «по словам» ---
-   Разбиваем заголовок на слова, каждое слово — отдельный <span class="word">.
-   Дальше CSS (раздел «ОБЩИЙ ВИД РАЗДЕЛОВ») выводит их по очереди. */
+/* --- 3. Подсветка пункта меню того раздела, который сейчас на экране ---
+   Работает на главной: у ссылок меню есть data-section="id раздела". */
+const sectionLinks = Array.from(document.querySelectorAll('.nav__link[data-section]'));
+
+if (sectionLinks.length && 'IntersectionObserver' in window) {
+  // Следим за всеми разделами страницы. Если в середине экрана раздел,
+  // для которого нет пункта меню (главный экран, «Обо мне», финал), — ничего не подсвечиваем.
+  const sectionObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      sectionLinks.forEach((link) => {
+        const active = link.dataset.section === entry.target.id;
+        link.classList.toggle('nav__link--active', active);
+      });
+    });
+  }, { rootMargin: '-45% 0px -50% 0px' });
+
+  document.querySelectorAll('main > section[id]').forEach((section) => sectionObserver.observe(section));
+}
+
+
+/* --- 4. Заголовки «по словам» ---
+   Заголовок с классом .split разбиваем на слова (<span class="word">),
+   и CSS выводит их по очереди. */
 function splitWords(element) {
   let index = 0;
   Array.from(element.childNodes).forEach((node) => {
@@ -109,7 +141,7 @@ function splitWords(element) {
       node.textContent.split(/(\s+)/).forEach((part) => {
         if (!part) return;
         if (/^\s+$/.test(part)) {
-          fragment.appendChild(document.createTextNode(part));
+          fragment.appendChild(document.createTextNode(' '));
         } else {
           const word = document.createElement('span');
           word.className = 'word';
@@ -119,21 +151,23 @@ function splitWords(element) {
         }
       });
       node.replaceWith(fragment);
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      // Например, <span class="gradient-text">Никита</span> — одно «слово»
+    } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName !== 'BR') {
+      // Например, <span class="t3d--cream">есть</span> — одно «слово»
       node.classList.add('word');
       node.style.setProperty('--i', index++);
     }
   });
+  element.classList.add('is-split');
 }
 
-document.querySelectorAll('.section__title, .hero__title').forEach(splitWords);
+document.querySelectorAll('.split').forEach(splitWords);
 
 
-/* --- 4. Появление блоков при прокрутке ---
+/* --- 5. Появление блоков при прокрутке ---
    Следим за элементами с классом .reveal. Как только элемент
-   показался на экране — добавляем ему класс .visible (см. style.css).
-   Карточки, появившиеся одновременно, выезжают по очереди — «волной». */
+   показался на экране — добавляем класс .visible (см. style.css).
+   Блоки, появившиеся одновременно, выезжают по очереди (каждый на 100 мс позже). */
+const STAGGER = 100; // задержка между соседними блоками, мс
 const revealItems = document.querySelectorAll('.reveal');
 
 if ('IntersectionObserver' in window && !reduceMotion) {
@@ -141,33 +175,28 @@ if ('IntersectionObserver' in window && !reduceMotion) {
     entries
       .filter((entry) => entry.isIntersecting)
       .forEach((entry, index) => {
-        entry.target.style.transitionDelay = index * 0.12 + 's';
-        entry.target.classList.add('visible');
-        observer.unobserve(entry.target); // анимируем только один раз
+        const item = entry.target;
+        if (!item.classList.contains('split')) item.style.transitionDelay = (index * STAGGER) + 'ms';
+        item.classList.add('visible');
+        observer.unobserve(item); // анимируем только один раз
+        // После появления убираем задержку, чтобы наведение срабатывало мгновенно
+        setTimeout(() => { item.style.transitionDelay = ''; }, 900 + index * STAGGER);
       });
-  }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
 
-  revealItems.forEach((item) => {
-    observer.observe(item);
-    // После появления убираем задержку, чтобы наведение срабатывало мгновенно
-    item.addEventListener('transitionend', function clearDelay(event) {
-      if (event.target !== item || event.propertyName !== 'opacity') return;
-      item.style.transitionDelay = '';
-      item.removeEventListener('transitionend', clearDelay);
-    });
-  });
+  revealItems.forEach((item) => observer.observe(item));
 } else {
   // Старый браузер или «уменьшить движение» — просто показываем всё сразу
   revealItems.forEach((item) => item.classList.add('visible'));
 }
 
 
-/* --- 5. 3D-наклон карточек и свечение за курсором ---
+/* --- 6. 3D-наклон карточек за мышью (до 6°) ---
    Работает только с мышью: на телефонах и планшетах отключён. */
 const MAX_TILT = 6; // максимальный наклон в градусах
 
 if (canHover && !reduceMotion) {
-  document.querySelectorAll('.work-card, .price-card').forEach((card) => {
+  document.querySelectorAll('.w-card, .work-card').forEach((card) => {
     let frame = null;
 
     card.addEventListener('pointermove', (event) => {
@@ -178,9 +207,6 @@ if (canHover && !reduceMotion) {
         const y = (event.clientY - rect.top) / rect.height - 0.5;
         card.style.setProperty('--ry', (x * MAX_TILT * 2).toFixed(2) + 'deg');
         card.style.setProperty('--rx', (-y * MAX_TILT * 2).toFixed(2) + 'deg');
-        // Положение светящегося пятна
-        card.style.setProperty('--mx', ((x + 0.5) * 100).toFixed(1) + '%');
-        card.style.setProperty('--my', ((y + 0.5) * 100).toFixed(1) + '%');
         card.classList.add('is-tilting');
         frame = null;
       });
@@ -190,226 +216,47 @@ if (canHover && !reduceMotion) {
       if (frame) cancelAnimationFrame(frame);
       frame = null;
       card.classList.remove('is-tilting');
-      ['--rx', '--ry', '--mx', '--my'].forEach((name) => card.style.removeProperty(name));
+      card.style.removeProperty('--rx');
+      card.style.removeProperty('--ry');
     });
   });
 }
 
 
-/* --- 6. Главная: частицы на фоне и вступительная анимация --- */
-const particles = document.getElementById('particles');
+/* --- 7. Кружок-курсор (только компьютер с мышью) --- */
+const cursor = document.getElementById('cursor');
 
-if (particles && !reduceMotion) {
-  const count = window.innerWidth < 600 ? 10 : 18;
-  for (let i = 0; i < count; i++) {
-    const dot = document.createElement('span');
-    const size = 2 + Math.random() * 3;
-    const duration = 12 + Math.random() * 12;
-    dot.className = 'particle';
-    dot.style.left = Math.random() * 100 + '%';
-    dot.style.width = dot.style.height = size + 'px';
-    dot.style.animationDuration = duration + 's';
-    dot.style.animationDelay = -Math.random() * duration + 's';
-    dot.style.setProperty('--drift', (Math.random() * 80 - 40) + 'px');
-    particles.appendChild(dot);
-  }
-}
+if (cursor && canHover && !reduceMotion) {
+  const pos = { x: 0, y: 0, sx: 0, sy: 0 };
+  let cursorFrame = 0;
 
-if (hasGSAP && !reduceMotion) {
-  gsap.registerPlugin(ScrollTrigger);
-  // ScrollTrigger не должен сам восстанавливать прокрутку — страница всегда с начала
-  if (ScrollTrigger.clearScrollMemory) ScrollTrigger.clearScrollMemory('manual');
-
-  // Вступление на главной: заголовок выезжает по словам, затем остальное по очереди
-  if (document.querySelector('.hero__content')) {
-    gsap.from('.hero__title .word', {
-      yPercent: 70, opacity: 0, rotateX: -40,
-      duration: 0.8, stagger: 0.12, ease: 'power3.out', delay: 0.1
-    });
-    gsap.from('.hero__content > :not(.hero__title)', {
-      y: 26, opacity: 0, duration: 0.7, stagger: 0.08, ease: 'power3.out', delay: 0.25,
-      clearProps: 'transform,opacity'
-    });
-    gsap.from('.hero__visual', {
-      y: 40, opacity: 0, duration: 1, ease: 'power3.out', delay: 0.35,
-      clearProps: 'transform,opacity'
-    });
+  function moveCursor() {
+    pos.sx += (pos.x - pos.sx) * 0.22;
+    pos.sy += (pos.y - pos.sy) * 0.22;
+    cursor.style.transform = 'translate3d(' + pos.sx.toFixed(1) + 'px, ' + pos.sy.toFixed(1) + 'px, 0)';
+    const left = Math.abs(pos.x - pos.sx) + Math.abs(pos.y - pos.sy);
+    cursorFrame = left > 0.1 ? requestAnimationFrame(moveCursor) : 0;
   }
 
-  // Параллакс: фоновые пятна и предметы чуть отстают или обгоняют прокрутку.
-  // data-parallax в HTML — сила и направление (минус — в другую сторону)
-  document.querySelectorAll('[data-parallax]').forEach((element) => {
-    const speed = parseFloat(element.dataset.parallax) || 0;
-    gsap.fromTo(element, { y: -speed * 120 }, {
-      y: speed * 120,
-      ease: 'none',
-      scrollTrigger: {
-        trigger: element.closest('section'),
-        start: 'top bottom',
-        end: 'bottom top',
-        scrub: 0.8
-      }
-    });
-  });
-
-  // Пересчитываем позиции, когда загрузились шрифты и картинки
-  window.addEventListener('load', () => ScrollTrigger.refresh());
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => ScrollTrigger.refresh());
-}
-
-
-/* --- 7. Главная: 3D-телефон с моими работами ---
-   Внутри экрана по очереди показываются работы (блоки .phone__slide).
-   Каждая работа плавно прокручивается, затем сменяется следующей, по кругу.
-   Высокий (мобильный) скриншот едет сверху вниз, широкий — слева направо.
-
-   ГДЕ МЕНЯТЬ скорость: числа ниже (в миллисекундах, 1000 = 1 секунда). */
-const PHONE_PAUSE = 1200;   // пауза в начале и в конце прокрутки
-const PHONE_SCROLL = 7000;  // сколько длится прокрутка одной работы
-const PHONE_FADE = 900;     // плавная смена работ (как transition в style.css)
-
-const phone = document.getElementById('phone');
-
-if (phone) {
-  const slides = Array.from(phone.querySelectorAll('.phone__slide'));
-  const dotsBox = document.getElementById('phone-dots');
-  const phoneTitle = document.getElementById('phone-title');
-  const phoneType = document.getElementById('phone-type');
-  const scene = document.getElementById('phone-scene');
-  const tilt = document.getElementById('phone-tilt');
-  const animations = new Map(); // текущая анимация прокрутки каждого слайда
-  let current = 0;
-  let nextTimer = null;
-  let captionTimer = null;
-  let isVisible = true;
-
-  // Если указан мобильный скриншот (data-mobile) — показываем его вместо обычного
-  slides.forEach((slide) => {
-    const img = slide.querySelector('img');
-    if (img.dataset.mobile) img.src = img.dataset.mobile;
-  });
-
-  // Точки-переключатели: по одной на каждую работу
-  const dots = slides.map((slide, index) => {
-    const dot = document.createElement('button');
-    dot.type = 'button';
-    dot.setAttribute('aria-label', 'Показать работу «' + slide.dataset.title + '»');
-    dot.addEventListener('click', () => show(index));
-    dotsBox.appendChild(dot);
-    return dot;
-  });
-
-  // Прокрутка картинки внутри экрана
-  function scrollSlide(slide) {
-    const img = slide.querySelector('img');
-    const run = () => {
-      if (!img.naturalWidth) return;
-      const screenW = slide.clientWidth;
-      const screenH = slide.clientHeight;
-      const ratio = img.naturalHeight / img.naturalWidth;
-      // Картинка «выше» экрана — едет вниз, иначе — вправо
-      const tall = ratio > screenH / screenW;
-      slide.classList.toggle('is-tall', tall);
-      slide.classList.toggle('is-wide', !tall);
-      const shiftX = tall ? 0 : screenH / ratio - screenW;
-      const shiftY = tall ? screenW * ratio - screenH : 0;
-
-      if (animations.has(slide)) animations.get(slide).cancel();
-      if (reduceMotion || !img.animate) return;
-      animations.set(slide, img.animate([
-        { transform: 'translate3d(0, 0, 0)' },
-        { transform: 'translate3d(' + (-shiftX) + 'px, ' + (-shiftY) + 'px, 0)' }
-      ], {
-        duration: PHONE_SCROLL,
-        delay: PHONE_PAUSE,
-        easing: 'cubic-bezier(0.45, 0, 0.55, 1)',
-        fill: 'both'
-      }));
-    };
-    if (img.complete) run(); else img.addEventListener('load', run, { once: true });
-  }
-
-  function show(index) {
-    const previous = slides[current];
-    current = (index + slides.length) % slides.length;
-    const slide = slides[current];
-
-    slides.forEach((s, i) => s.classList.toggle('is-active', i === current));
-    dots.forEach((dot, i) => {
-      dot.classList.toggle('is-active', i === current);
-      dot.setAttribute('aria-current', i === current ? 'true' : 'false');
-    });
-
-    // Подпись под телефоном меняется с мягким исчезновением
-    clearTimeout(captionTimer);
-    phoneTitle.parentElement.classList.add('is-swapping');
-    captionTimer = setTimeout(() => {
-      phoneTitle.textContent = slide.dataset.title;
-      phoneType.textContent = slide.dataset.type;
-      phoneTitle.parentElement.classList.remove('is-swapping');
-    }, 250);
-
-    // Ушедший слайд возвращаем в начало, когда он уже скрылся
-    if (previous !== slide) {
-      setTimeout(() => {
-        if (previous !== slides[current] && animations.has(previous)) animations.get(previous).cancel();
-      }, PHONE_FADE);
+  window.addEventListener('pointermove', (event) => {
+    if (event.pointerType !== 'mouse') return;
+    pos.x = event.clientX;
+    pos.y = event.clientY;
+    if (!cursor.classList.contains('cursor--on')) {
+      // Первое появление — сразу под мышью, без «прилёта» из угла
+      pos.sx = pos.x;
+      pos.sy = pos.y;
+      cursor.classList.add('cursor--on');
     }
+    // Над ссылками и кнопками кружок увеличивается
+    const overLink = event.target.closest && event.target.closest('a, button, summary, input, textarea, label');
+    cursor.classList.toggle('cursor--link', Boolean(overLink));
+    if (!cursorFrame) cursorFrame = requestAnimationFrame(moveCursor);
+  }, { passive: true });
 
-    scrollSlide(slide);
-    scheduleNext();
-  }
-
-  function scheduleNext() {
-    clearTimeout(nextTimer);
-    // При «уменьшить движение» работы сами не листаются — только по точкам
-    if (reduceMotion || !isVisible || document.hidden) return;
-    nextTimer = setTimeout(() => show(current + 1), PHONE_PAUSE * 2 + PHONE_SCROLL);
-  }
-
-  // Пауза, когда телефон не виден на экране или вкладка свёрнута
-  function setPaused(paused) {
-    const anim = animations.get(slides[current]);
-    if (paused) {
-      clearTimeout(nextTimer);
-      if (anim) anim.pause();
-    } else {
-      show(current); // начинаем текущую работу заново
-    }
-  }
-
-  if ('IntersectionObserver' in window) {
-    new IntersectionObserver((entries) => {
-      const visibleNow = entries[0].isIntersecting;
-      if (visibleNow === isVisible) return;
-      isVisible = visibleNow;
-      setPaused(!isVisible);
-    }).observe(phone);
-  }
-
-  document.addEventListener('visibilitychange', () => {
-    if (isVisible) setPaused(document.hidden);
+  document.documentElement.addEventListener('mouseleave', () => {
+    cursor.classList.remove('cursor--on');
   });
-
-  // При изменении размера окна пересчитываем прокрутку
-  window.addEventListener('resize', () => scrollSlide(slides[current]));
-
-  // Телефон слегка наклоняется вслед за мышью (только компьютер)
-  if (canHover && !reduceMotion) {
-    scene.addEventListener('pointermove', (event) => {
-      const rect = scene.getBoundingClientRect();
-      const x = (event.clientX - rect.left) / rect.width - 0.5;
-      const y = (event.clientY - rect.top) / rect.height - 0.5;
-      tilt.style.setProperty('--tilt-y', (x * 16).toFixed(1) + 'deg');
-      tilt.style.setProperty('--tilt-x', (-y * 10).toFixed(1) + 'deg');
-    });
-    scene.addEventListener('pointerleave', () => {
-      tilt.style.removeProperty('--tilt-x');
-      tilt.style.removeProperty('--tilt-y');
-    });
-  }
-
-  show(0);
 }
 
 
@@ -497,7 +344,7 @@ if (modal) {
 }
 
 
-/* --- 9. Контакты: форма заявки ---
+/* --- 9. Форма заявки (страница «Контакты» и финал на главной) ---
    ВАЖНО: сайт открывается как обычный файл, без сервера, поэтому
    сама форма письма не отправляет. При отправке открывается
    почтовая программа с готовым письмом на ваш адрес.
@@ -526,7 +373,7 @@ if (form) {
     history.replaceState(null, '', window.location.pathname);
   }
 
-  // Подсвечиваем незаполненное поле красным и показываем подсказку
+  // Подсвечиваем незаполненное поле и показываем подсказку
   function checkField(field) {
     const isEmpty = field.value.trim() === '';
     field.closest('.form__field').classList.toggle('form__field--error', isEmpty);
@@ -586,83 +433,7 @@ if (form) {
 }
 
 
-/* --- 10. Декор: предметы за мышью и свечение курсора ---
-   Плавающие предметы чуть смещаются вслед за мышью (каждый со своей
-   «глубиной» --depth, см. style.css), а за курсором плывёт мягкое свечение.
-   Только для компьютера с мышью и без «уменьшить движение». */
-const decorLayers = document.querySelectorAll('.decor');
-const cursorGlow = document.getElementById('cursor-glow');
-
-if (canHover && !reduceMotion && cursorGlow) {
-  const mouse = { x: 0, y: 0, smoothX: 0, smoothY: 0 };       // от -1 до 1
-  const glow = { x: 0, y: 0, smoothX: 0, smoothY: 0 };        // в пикселях
-  let decorFrame = 0;
-
-  function moveDecor() {
-    // Плавно догоняем мышь: предметы — медленнее, свечение — быстрее
-    mouse.smoothX += (mouse.x - mouse.smoothX) * 0.06;
-    mouse.smoothY += (mouse.y - mouse.smoothY) * 0.06;
-    glow.smoothX += (glow.x - glow.smoothX) * 0.18;
-    glow.smoothY += (glow.y - glow.smoothY) * 0.18;
-
-    decorLayers.forEach((layer) => {
-      layer.style.setProperty('--mouse-x', mouse.smoothX.toFixed(3));
-      layer.style.setProperty('--mouse-y', mouse.smoothY.toFixed(3));
-    });
-    cursorGlow.style.transform = 'translate3d(' + glow.smoothX.toFixed(1) + 'px, ' + glow.smoothY.toFixed(1) + 'px, 0)';
-
-    // Анимация останавливается сама, когда всё догнало мышь
-    const left = Math.abs(mouse.x - mouse.smoothX) + Math.abs(mouse.y - mouse.smoothY) +
-      (Math.abs(glow.x - glow.smoothX) + Math.abs(glow.y - glow.smoothY)) / 100;
-    decorFrame = left > 0.001 ? requestAnimationFrame(moveDecor) : 0;
-  }
-
-  window.addEventListener('pointermove', (event) => {
-    if (event.pointerType !== 'mouse') return;
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = (event.clientY / window.innerHeight) * 2 - 1;
-    glow.x = event.clientX;
-    glow.y = event.clientY;
-    if (!cursorGlow.classList.contains('cursor-glow--on')) {
-      // Первое появление — сразу под курсором, без «прилёта» из угла
-      glow.smoothX = glow.x;
-      glow.smoothY = glow.y;
-      cursorGlow.classList.add('cursor-glow--on');
-    }
-    if (!decorFrame) decorFrame = requestAnimationFrame(moveDecor);
-  }, { passive: true });
-
-  // Мышь ушла за пределы окна — прячем свечение
-  document.documentElement.addEventListener('mouseleave', () => {
-    cursorGlow.classList.remove('cursor-glow--on');
-  });
-}
-
-
-/* --- 11. Магнитные кнопки ---
-   Кнопка слегка тянется к курсору, пока он над ней. */
-if (canHover && !reduceMotion) {
-  const MAGNET = 7; // максимальный сдвиг в пикселях
-
-  document.querySelectorAll('.btn, .to-top').forEach((button) => {
-    button.addEventListener('pointermove', (event) => {
-      const rect = button.getBoundingClientRect();
-      const x = (event.clientX - rect.left) / rect.width - 0.5;   // от -0.5 до 0.5
-      const y = (event.clientY - rect.top) / rect.height - 0.5;
-      // У широких кнопок (на всю карточку) тяга по горизонтали слабее
-      const k = rect.width > 260 ? 0.4 : 1;
-      button.style.setProperty('--bx', (x * MAGNET * 2 * k).toFixed(1) + 'px');
-      button.style.setProperty('--by', (y * MAGNET * 2).toFixed(1) + 'px');
-    });
-    button.addEventListener('pointerleave', () => {
-      button.style.removeProperty('--bx');
-      button.style.removeProperty('--by');
-    });
-  });
-}
-
-
-/* --- 12. Бегущая лента технологий ---
+/* --- 10. Бегущая лента технологий ---
    Для бесконечной прокрутки нужна вторая копия значков: делаем её здесь. */
 document.querySelectorAll('.marquee__track').forEach((track) => {
   Array.from(track.children).forEach((item) => {
@@ -674,5 +445,6 @@ document.querySelectorAll('.marquee__track').forEach((track) => {
 });
 
 
-/* --- 13. Текущий год в подвале (обновляется сам) --- */
-document.getElementById('year').textContent = new Date().getFullYear();
+/* --- 11. Текущий год в подвале (обновляется сам) --- */
+const yearEl = document.getElementById('year');
+if (yearEl) yearEl.textContent = new Date().getFullYear();

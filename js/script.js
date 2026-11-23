@@ -283,6 +283,8 @@ if (modal) {
 
     modalImg.src = image.getAttribute('src');
     modalImg.alt = image.alt;
+    // Вертикальный скриншот с телефона (бот) — показываем его по центру, а не на всю ширину
+    modal.classList.toggle('modal--phone', card.classList.contains('work-card--phone'));
     modalType.textContent = card.querySelector('.work-card__badge').textContent;
     modalTitle.textContent = title;
     modalText.textContent = card.querySelector('.work-card__text').textContent;

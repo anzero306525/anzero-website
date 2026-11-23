@@ -12,8 +12,8 @@
 const FLOWERS_CONFIG = {
   // --- Главный экран (река цветков) ---
   hero: {
-    countDesktop: 420,   // сколько цветков на компьютере (350–500)
-    countMobile: 150,    // сколько на телефоне (120–180)
+    countDesktop: 540,   // сколько цветков на компьютере (400–600)
+    countMobile: 190,    // сколько на телефоне (150–220)
     speed: 1,            // общая скорость: 0.5 — медленнее, 2 — в два раза быстрее
     riverWidth: 0.24,    // ширина «реки» (доля высоты экрана)
     waveHeight: 0.12,    // насколько сильно река изгибается волной
@@ -22,15 +22,21 @@ const FLOWERS_CONFIG = {
     leafShare: 0.1,      // доля тёмно-зелёных листиков (0.1 = 10%)
     frontDepth: 0.88,    // цветки «ближе» этого значения летят ПЕРЕД заголовком (1 — ни одного)
     frontDepthMobile: 0.95, // то же для телефона (меньше цветков перед текстом)
-    introDuration: 1700  // за сколько миллисекунд цветки «вылетают» при загрузке
+    introDuration: 1700, // за сколько миллисекунд цветки «вылетают» при загрузке
+
+    // Опадание при прокрутке: цветки по очереди срываются с «реки» и падают вниз
+    fallDistance: 0.85,  // к какой доле высоты главного экрана опадут все цветки
+    fallSmooth: 0.07,    // плавность (0.03 — очень мягко и с запаздыванием, 0.2 — почти сразу)
+    fallDrift: 1         // насколько сильно ветер уносит падающие цветки в сторону
   },
 
   // --- Фоновый тёмный слой на всех страницах ---
   background: {
-    countDesktop: 70,
-    countMobile: 32,
+    countDesktop: 90,
+    countMobile: 40,
     speed: 0.35,         // скорость падения
-    parallax: 0.15,      // насколько слой сдвигается при прокрутке
+    parallax: 0,         // насколько слой сдвигается вверх при прокрутке (0 — не сдвигается)
+    scrollFall: 0.28,    // насколько быстрее падают лепестки, пока листаете страницу
     sizeMin: 14,
     sizeMax: 44
     // Прозрачность слоя — в css/style.css, класс .petals-bg (opacity)
@@ -204,6 +210,7 @@ const FLOWERS_CONFIG = {
   const lerp = (a, b, t) => a + (b - a) * t;
   const clamp01 = (t) => (t < 0 ? 0 : t > 1 ? 1 : t);
   const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+  const smooth = (t) => t * t * (3 - 2 * t);
 
 
   /* ---------- 2. Подготовка canvas под размер экрана ---------- */
@@ -243,6 +250,9 @@ const FLOWERS_CONFIG = {
     let flowers = [];
     const pointer = { x: -9999, y: -9999, active: false };
     let startTime = performance.now();
+    let fall = 0;          // плавный прогресс опадания 0…1
+    let scrollSmooth = 0;  // плавная прокрутка, px
+    let cleared = false;   // все цветки опали и холсты уже очищены
 
     // Центр реки на высоте y для точки x: широкая плавная волна, слегка наискосок
     function riverY(x, t) {
@@ -285,9 +295,24 @@ const FLOWERS_CONFIG = {
         swaySpeed: 0.3 + Math.random() * 0.6,
         phase: Math.random() * Math.PI * 2,
         delay: 0,
+        swayPh: Math.random() * Math.PI * 2,  // фаза покачивания (копится каждый кадр)
+        flipPh: Math.random() * Math.PI * 2,  // фаза «переворота»
+        // Опадание при прокрутке: когда цветок срывается, куда его уносит и как крутит
+        fallAt: Math.random() * 0.5 + (1 - z) * 0.1,
+        fallDrift: (Math.random() - 0.3) * (90 + z * 260),
+        fallSpin: (Math.random() - 0.5) * (3 + z * 5),
+        fallSpeed: 1 + Math.random() * 0.4,
         // смещение от курсора (пружина)
         dx: 0, dy: 0, ddx: 0, ddy: 0
       };
+    }
+
+    // Сколько прокручено от верха главного экрана, px
+    function heroScroll() {
+      return Math.max(0, window.scrollY - hero.offsetTop);
+    }
+    function fallTarget() {
+      return clamp01(heroScroll() / Math.max(1, hero.offsetHeight * H.fallDistance));
     }
 
     function build() {
@@ -303,6 +328,9 @@ const FLOWERS_CONFIG = {
       }
       // Дальние рисуем первыми, ближние — поверх
       flowers.sort((a, b) => a.z - b.z);
+      // Если страницу открыли уже прокрученной — цветки сразу на своих местах
+      fall = reduceMotion ? 0 : fallTarget();
+      scrollSmooth = reduceMotion ? 0 : heroScroll();
     }
 
     function resize() {
@@ -323,6 +351,30 @@ const FLOWERS_CONFIG = {
       const M = CFG.mouse;
       const R2 = M.radius * M.radius;
 
+      // Плавно догоняем прокрутку: цветки опадают мягко, даже если колесо дёргается
+      if (dt && !reduceMotion) {
+        const k = 1 - Math.pow(1 - H.fallSmooth, step);
+        const target = fallTarget();
+        fall += (target - fall) * k;
+        if (Math.abs(target - fall) < 0.0004) fall = target;
+        const s = heroScroll();
+        scrollSmooth += (s - scrollSmooth) * Math.min(1, k * 2.5);
+        if (Math.abs(s - scrollSmooth) < 0.3) scrollSmooth = s;
+      }
+
+      // Все цветки опали — очищаем холсты один раз и не тратим силы
+      if (fall >= 1) {
+        if (!cleared) {
+          back.setTransform(1, 0, 0, 1, 0, 0);
+          back.clearRect(0, 0, backCanvas.width, backCanvas.height);
+          front.setTransform(1, 0, 0, 1, 0, 0);
+          front.clearRect(0, 0, frontCanvas.width, frontCanvas.height);
+          cleared = true;
+        }
+        return;
+      }
+      cleared = false;
+
       back.setTransform(1, 0, 0, 1, 0, 0);
       back.clearRect(0, 0, backCanvas.width, backCanvas.height);
       front.setTransform(1, 0, 0, 1, 0, 0);
@@ -331,20 +383,35 @@ const FLOWERS_CONFIG = {
       for (let i = 0; i < flowers.length; i++) {
         const f = flowers[i];
 
-        if (dt) {
-          f.x += f.vx * H.speed * (dt / 1000);
-          f.rot += f.spin * H.speed * (dt / 1000);
+        // q — насколько этот цветок уже опал (0 — ещё в реке, 1 — улетел вниз за экран)
+        const q = clamp01(((fall - f.fallAt) / 0.4) * f.fallSpeed);
+        const qs = smooth(q);
 
-          // Улетел за правый край — переносим на левый
-          if (f.x > w + f.size) {
+        if (dt) {
+          f.x += f.vx * H.speed * (dt / 1000) * (1 - qs * 0.6);
+          f.rot += f.spin * H.speed * (dt / 1000) * (1 + q * 1.5);
+          // Падающий цветок покачивается и переворачивается быстрее
+          f.swayPh += (dt / 1000) * f.swaySpeed * (1 + q * 1.6);
+          f.flipPh += (dt / 1000) * f.flipSpeed * (1 + q * 2.2);
+
+          // Улетел за правый край — переносим на левый (только пока он в реке)
+          if (f.x > w + f.size && q === 0) {
             f.x = -f.size - Math.random() * 120;
             f.offset = gauss() * spreadFor(f.z);
           }
         }
 
-        const sway = Math.sin(t * 0.001 * f.swaySpeed + f.phase) * f.swayAmp;
+        const sway = Math.sin(f.swayPh) * f.swayAmp * (1 + q * 1.8);
         let x = f.x;
         let y = riverY(f.x, t) + f.offset + sway;
+
+        // Прокрутка: цветок в реке уезжает вверх вместе со страницей,
+        // а сорвавшийся — плавно, с ускорением, падает вниз и уносится ветром
+        if (!reduceMotion) {
+          y -= scrollSmooth * (1 - qs);
+          y += q * q * h * 1.7;
+          x += qs * f.fallDrift * H.fallDrift + Math.sin(f.swayPh * 1.7) * q * (14 + f.z * 26);
+        }
 
         // Отталкивание от курсора + пружина обратно
         if (dt) {
@@ -372,7 +439,7 @@ const FLOWERS_CONFIG = {
         // У краёв экрана цветки чуть крупнее (перспектива)
         const edge = Math.abs(x - w / 2) / (w / 2);
         let size = f.size * (1 + edge * 0.35 * f.z);
-        let alpha = f.alpha;
+        let alpha = f.alpha * (1 - q * 0.3);
 
         // Вступление: цветки «вылетают» волной слева
         if (!reduceMotion && sinceStart < H.introDuration + 1500) {
@@ -383,21 +450,26 @@ const FLOWERS_CONFIG = {
         }
 
         // «Покачивание»: цветок слегка поворачивается к нам то одной, то другой стороной
-        const flip = 0.74 + 0.26 * Math.cos(t * 0.001 * f.flipSpeed + f.phase);
-        drawOne(f.front ? front : back, f.sprite, x, y, size, f.rot, flip, alpha, dpr);
+        // (у падающего — сильнее, будто кувыркается в воздухе)
+        const flip = (0.74 - q * 0.4) + (0.26 + q * 0.4) * Math.cos(f.flipPh);
+        const rot = f.rot + f.fallSpin * qs;
+        drawOne(f.front ? front : back, f.sprite, x, y, size, rot, flip, alpha, dpr);
       }
 
       back.globalAlpha = 1;
       front.globalAlpha = 1;
     }
 
-    // Позиция курсора / пальца относительно главного экрана
+    // Позиция курсора / пальца. Холсты закреплены на экране (position: fixed),
+    // поэтому координаты окна совпадают с координатами холста.
     function setPointer(clientX, clientY) {
-      const rect = hero.getBoundingClientRect();
-      pointer.x = clientX - rect.left;
-      pointer.y = clientY - rect.top;
-      pointer.active = pointer.y >= 0 && pointer.y <= rect.height;
+      pointer.x = clientX;
+      pointer.y = clientY;
+      pointer.active = true;
     }
+
+    // Холсты «прилипают» к экрану, чтобы цветки могли падать дальше главного экрана
+    if (!reduceMotion) hero.classList.add('hero--falling');
 
     if (!reduceMotion) {
       window.addEventListener('pointermove', (e) => setPointer(e.clientX, e.clientY), { passive: true });
@@ -414,19 +486,8 @@ const FLOWERS_CONFIG = {
     build();
     startTime = performance.now();
 
-    heroSystem = {
-      visible: true,
-      render,
-      resize
-    };
-
-    // Пауза, когда главный экран не виден
-    if ('IntersectionObserver' in window) {
-      new IntersectionObserver((entries) => {
-        heroSystem.visible = entries[0].isIntersecting;
-        if (heroSystem.visible) loop.wake();
-      }).observe(hero);
-    }
+    // Когда все цветки опали, render() сам очищает холсты и почти ничего не делает
+    heroSystem = { render, resize };
   }
 
 
@@ -475,10 +536,21 @@ const FLOWERS_CONFIG = {
       if (reduceMotion) render(performance.now(), 0);
     }
 
+    let lastScroll = window.scrollY;
+    let gust = 0; // плавная «порывистость» от прокрутки, px/с
+
     function render(now, dt) {
       const w = view.w;
       const h = view.h;
       const scroll = reduceMotion ? 0 : window.scrollY * B.parallax;
+
+      // Чем быстрее листаете — тем быстрее опадают лепестки (и плавно успокаиваются)
+      if (dt) {
+        const sy = window.scrollY;
+        const speedNow = Math.min(Math.abs(sy - lastScroll) / (dt / 1000), 2500);
+        lastScroll = sy;
+        gust += (speedNow - gust) * (speedNow > gust ? 0.12 : 0.04);
+      }
 
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
@@ -486,7 +558,7 @@ const FLOWERS_CONFIG = {
       for (let i = 0; i < petals.length; i++) {
         const p = petals[i];
         if (dt) {
-          p.y += p.vy * B.speed * (dt / 1000);
+          p.y += (p.vy * B.speed + gust * B.scrollFall * (0.4 + p.z * 0.6)) * (dt / 1000);
           p.x += p.vx * B.speed * (dt / 1000);
           p.rot += p.spin * (dt / 1000);
         }
@@ -516,7 +588,7 @@ const FLOWERS_CONFIG = {
     tick(now) {
       const dt = loop.last ? Math.min(now - loop.last, 64) : 16.67;
       loop.last = now;
-      if (heroSystem && heroSystem.visible) heroSystem.render(now, dt);
+      if (heroSystem) heroSystem.render(now, dt);
       if (bgSystem) bgSystem.render(now, dt);
       loop.frame = requestAnimationFrame(loop.tick);
     },

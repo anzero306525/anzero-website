@@ -472,6 +472,14 @@ ul { list-style: none; }
 .hero__canvas--back { z-index: 0; }
 .hero__canvas--front { z-index: 2; }
 
+/* При прокрутке цветки опадают и «вываливаются» за пределы главного экрана,
+   поэтому холсты закреплены на экране (класс добавляет js/flowers.js) */
+.hero--falling .hero__canvas {
+  position: fixed;
+  height: 100vh;
+  height: 100lvh;
+}
+
 /* Мягкая тьма по краям и плавный переход в следующий раздел */
 .hero::after {
   content: '';
@@ -876,6 +884,20 @@ section[id] { scroll-margin-top: 20px; }
     border-color: var(--cream);
   }
 }
+
+/* Вертикальные скриншоты с телефона (Telegram-боты): узкие «телефоны» в веере */
+.w-card__fan--bot {
+  background: radial-gradient(55% 75% at 50% 62%, rgba(140, 255, 60, 0.13), transparent 72%);
+}
+
+.fan--phone {
+  width: 31%;
+  aspect-ratio: 377 / 686;
+  top: 58%;
+  border-radius: 14px;
+}
+
+.fan--phone.fan--c { width: 34%; }
 
 /* Заглушка-превью для Telegram-ботов (пока нет скриншотов) */
 .fan--mock {
@@ -1501,6 +1523,43 @@ section[id] { scroll-margin-top: 20px; }
 }
 
 .work-card__more span { display: inline-block; transition: transform var(--t-fast) var(--ease); }
+
+/* Карточка с вертикальным скриншотом с телефона: «телефон» выглядывает снизу */
+.work-card--phone .work-card__cover {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  background:
+    radial-gradient(50% 80% at 50% 100%, rgba(140, 255, 60, 0.16), transparent 70%),
+    #0b0d0a;
+}
+
+.work-card--phone .cover__img {
+  width: auto;
+  height: 88%;
+  aspect-ratio: 377 / 686;
+  border-radius: 18px 18px 0 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-bottom: 0;
+  box-shadow: 0 -10px 50px rgba(120, 255, 40, 0.12);
+  transform-origin: 50% 100%;
+}
+
+/* То же в окне со скриншотом */
+.modal--phone .modal__cover {
+  display: grid;
+  place-items: center;
+  padding: clamp(20px, 4vw, 36px) 20px;
+  background: radial-gradient(50% 70% at 50% 50%, rgba(140, 255, 60, 0.12), transparent 70%), #0b0d0a;
+}
+
+.modal--phone .modal__cover img {
+  width: auto;
+  max-width: 100%;
+  max-height: 72vh;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
 
 /* Надпись «Скоро онлайн», если сайта ещё нет в интернете */
 .work-card__soon {
